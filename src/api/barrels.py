@@ -23,7 +23,7 @@ class Barrel(BaseModel):
 def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     """ """
     # Calculate the total ml of green potion delivered
-    total_ml_delivered = sum(barrel.ml_per_barrel * barrel.quantity for barrel in barrels_delivered if barrel.sku.startswith("GREEN"))
+    total_ml_delivered = sum(barrel.ml_per_barrel * barrel.quantity for barrel in barrels_delivered if "GREEN" in barrel.sku)
 
     with db.engine.begin() as connection:
         sql_to_execute = """
@@ -42,23 +42,16 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     """ """
     print(wholesale_catalog)
 
-    barrel_cost = 100  # Hard coded
-    green_ml_per_barrel = 1000  # Hard coded
     plan = []
-
+    sql_to_execute = """SELECT num_green_potions, gold FROM global_inventory"""
     with db.engine.begin() as connection:
-        sql_to_execute = """
-            SELECT num_green_potions, gold FROM global_inventory
-        """
-        inventory_result = connection.execute(sqlalchemy.text(sql_to_execute))
-        for i in inventory_result:
-            num_green_potions, gold = i
+        num_green_potions, gold = connection.execute(sqlalchemy.text(sql_to_execute)).first()
 
-            if num_green_potions < 10 and gold >= barrel_cost:
-                plan.append({
-                    "sku": "SMALL_GREEN_BARREL",
-                    "quantity": 1,
-                })
+        if num_green_potions < 10:
+            for barrel in wholesale_catalog:
+                if "GREEN" in barrel.sku and gold >= barrel.price:
+                    plan.append({"sku": barrel.sku, "quantity": (gold // barrel.price)})
+                    break 
 
     return plan
 
