@@ -20,7 +20,7 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
     """ """
     print(f"Potions delivered: {potions_delivered}, Order ID: {order_id}")
 
-    total_green_potions_delivered = sum(potion.quantity for potion in potions_delivered if potion.potion_type == [0, 1, 0, 0])
+    total_green_potions_delivered = sum(potion.quantity for potion in potions_delivered if potion.potion_type == [0, 100, 0, 0])
     
     total_ml_to_subtract = 100 * total_green_potions_delivered
 
@@ -55,7 +55,7 @@ def get_bottle_plan():
 
         if result >= 100:
             return {
-                "potion_type": [0, 1, 0, 0],
+                "potion_type": [0, 100, 0, 0],
                 "quantity": result // 100
             }
     return []
