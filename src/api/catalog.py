@@ -19,14 +19,17 @@ def get_catalog():
         result = connection.execute(sqlalchemy.text(sql_to_execute))
         num_green_potions = result.scalar() if result else 0
 
+    catalog_item = []
+
     green_potion_price = 50  
+    
+    if num_green_potions == 0:
+        catalog_item = [{
+            "sku": "GREEN_POTION_0",
+            "name": "green potion",
+            "quantity": num_green_potions,
+            "price": green_potion_price,
+            "potion_type": [0, 100, 0, 0], 
+        }]
 
-    catalog_item = {
-        "sku": "GREEN_POTION_0",
-        "name": "green potion",
-        "quantity": num_green_potions,
-        "price": green_potion_price,
-        "potion_type": [0, 100, 0, 0], 
-    }
-
-    return [catalog_item]
+    return catalog_item
