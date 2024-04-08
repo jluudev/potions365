@@ -18,15 +18,20 @@ class PotionInventory(BaseModel):
 @router.post("/deliver/{order_id}")
 def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int):
     """ """
-    print(f"potions delievered: {potions_delivered} order_id: {order_id}")
-    total_green_potions_delivered = sum(potion.quantity for potion in potions_delivered if potion.potion_type == [0, 100, 0, 0])
+    print(f"Potions delivered: {potions_delivered}, Order ID: {order_id}")
 
+    total_green_potions_delivered = sum(potion.quantity for potion in potions_delivered if potion.potion_type == [0, 100, 0, 0])
+    
+    total_ml_to_subtract = 100 * total_green_potions_delivered
+
+    # Update the global inventory with the new quantity of green potions and adjust the ml
+    sql_to_execute = """
+                UPDATE global_inventory
+                SET num_green_potions = num_green_potions + :quantity_added,
+                    num_green_ml = num_green_ml - :ml_subtracted
+            """
     with db.engine.begin() as connection:
-        sql_to_execute = """
-            UPDATE global_inventory
-            SET num_green_potions = num_green_potions + :quantity_added
-        """
-        connection.execute(sqlalchemy.text(sql_to_execute), {"quantity_added": total_green_potions_delivered})
+            connection.execute(sqlalchemy.text(sql_to_execute), {"quantity_added": total_green_potions_delivered, "ml_subtracted": total_ml_to_subtract})
 
     return {"msg": "OK", "total_potions_added": total_green_potions_delivered}
 
@@ -48,22 +53,12 @@ def get_bottle_plan():
         inventory_check_sql = "SELECT num_green_ml FROM global_inventory"
         result = connection.execute(sqlalchemy.text(inventory_check_sql)).scalar()
 
-        if result:
-            num_green_ml = result
-            num_bottles = num_green_ml // ml_per_bottle
-
-            if num_bottles > 0:
-                sql_to_execute = """
-                    UPDATE global_inventory
-                    SET num_green_ml = num_green_ml - (:num_bottles * :ml_per_bottle),
-                        num_green_potions = num_green_potions + :num_bottles
-                """
-                connection.execute(sqlalchemy.text(sql_to_execute), {"num_bottles": num_bottles, "ml_per_bottle": ml_per_bottle})
-
-                return [{"potion_type": [0, 100, 0, 0], "quantity": num_bottles}]
-
-    return [{"potion_type": [0, 100, 0, 0], "quantity": 0}]
-
+        if result >= 100:
+            return {
+                "potion_type": [0, 100, 0, 0],
+                "quantity": result // 100
+            }
+    return []
 
 if __name__ == "__main__":
     print(get_bottle_plan())

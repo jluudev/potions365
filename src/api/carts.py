@@ -86,24 +86,29 @@ def post_visits(visit_id: int, customers: list[Customer]):
 
     return "OK"
 
+carts = {}
+cart_id = 0
 
 @router.post("/")
 def create_cart(new_cart: Customer):
     """ """
-    # with db.engine.begin() as connection:
-    #   result = connection.execute(sqlalchemy.text(sql_to_execute))
-    return {"cart_id": 1}
+    global cart_id
+    cart_id += 1
+    cart = {"customer_name": new_cart.customer_name, "sku": "", "quantity": 0}
+    carts[cart_id] = cart
+    return {cart_id: cart}
 
 
 class CartItem(BaseModel):
     quantity: int
 
-
 @router.post("/{cart_id}/items/{item_sku}")
 def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
     """ """
-    # with db.engine.begin() as connection:
-    #   result = connection.execute(sqlalchemy.text(sql_to_execute))
+    print(carts)
+    carts[cart_id]["sku"] = item_sku
+    carts[cart_id]["quantity"] = cart_item.quantity
+    
     return "OK"
 
 
@@ -113,20 +118,25 @@ class CartCheckout(BaseModel):
 @router.post("/{cart_id}/checkout")
 def checkout(cart_id: int, cart_checkout: CartCheckout):
     """ """
-    total_potions = 1   #hard code
-    potion_price = 50   #hard code
-    total_cost = total_potions * potion_price
-
-    sql_to_execute = """
-    UPDATE global_inventory
-    SET num_green_potions = num_green_potions - :total_potions,
-        gold = gold + :total_cost
-    WHERE num_green_potions >= :total_potions
-    """
     with db.engine.begin() as connection:
-        result = connection.execute(sqlalchemy.text(sql_to_execute), {"total_potions": total_potions, "total_cost": total_cost})
-    
-    if result.rowcount > 0:
-        return {"total_potions_bought": total_potions, "total_gold_paid": total_cost}
-    else:
-        return {"total_potions_bought": 0, "total_gold_paid": 0}
+        inventory_result = connection.execute(sqlalchemy.text("SELECT num_green_potions, gold FROM global_inventory"))
+        inventory_row = inventory_result.first()
+        if inventory_row:
+            num_green_potions = inventory_row.num_green_potions
+            number_purchased = carts[cart_id]["quantity"] if carts[cart_id]["quantity"] <= num_green_potions else num_green_potions
+            potion_price = 50  # Hard coded
+            total_cost = number_purchased * potion_price
+            
+            # Only do if there's enough potions
+            if number_purchased > 0:
+                update_result = connection.execute(sqlalchemy.text("""
+                    UPDATE global_inventory
+                    SET num_green_potions = num_green_potions - :number_purchased,
+                        gold = gold + :total_cost
+                    WHERE num_green_potions >= :number_purchased
+                """), {"number_purchased": number_purchased, "total_cost": total_cost})
+                
+                if update_result.rowcount > 0:
+                    return {"total_potions_bought": number_purchased, "total_gold_paid": total_cost}
+        
+    return {"total_potions_bought": 0, "total_gold_paid": 0}
