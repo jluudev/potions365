@@ -43,13 +43,13 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     print(wholesale_catalog)
 
     plan = []
-    sql_to_execute = """SELECT num_green_potions, gold FROM global_inventory"""
+    sql_to_execute = """SELECT num_green_potions, gold, num_green_ml FROM global_inventory"""
     with db.engine.begin() as connection:
-        num_green_potions, gold = connection.execute(sqlalchemy.text(sql_to_execute)).first()
+        num_green_potions, gold, num_green_ml = connection.execute(sqlalchemy.text(sql_to_execute)).first()
 
         if num_green_potions < 10:
             for barrel in wholesale_catalog:
-                if "GREEN" in barrel.sku and gold >= barrel.price:
+                if "GREEN" in barrel.sku and gold >= barrel.price and (num_green_ml + barrel.ml_per_barrel) <= 10000:
                     plan.append({"sku": barrel.sku, "quantity": (gold // barrel.price)})
                     break 
 
