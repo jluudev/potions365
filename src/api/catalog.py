@@ -22,8 +22,8 @@ def get_catalog():
     catalog_item = []
 
     green_potion_price = 50  
-    
-    if num_green_potions == 0:
+
+    if num_green_potions != 0:
         catalog_item = [{
             "sku": "GREEN_POTION_0",
             "name": "green potion",
