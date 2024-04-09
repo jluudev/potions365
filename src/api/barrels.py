@@ -49,7 +49,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
 
         if num_green_potions < 10:
             for barrel in wholesale_catalog:
-                if "GREEN" in barrel.sku and gold >= barrel.price and (num_green_ml + barrel.ml_per_barrel) <= 10000:
+                if "SMALL_GREEN_BARREL" in barrel.sku and gold >= barrel.price and (num_green_ml + barrel.ml_per_barrel) <= 10000:
                     plan.append({"sku": barrel.sku, "quantity": (gold // barrel.price)})
                     break 
 
