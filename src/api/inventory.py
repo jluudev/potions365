@@ -17,7 +17,7 @@ def get_inventory():
     with db.engine.begin() as connection:
       result = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory")).first()
     
-    return {"number_of_green_potions": result.num_green_potions, "green_ml_in_barrels": result.num_green_ml, "gold": result.gold}
+    return {"number_of_potions": result.num_green_potions, "ml_in_barrels": result.num_green_ml, "gold": result.gold}
 
 # Gets called once a day
 @router.post("/plan")
