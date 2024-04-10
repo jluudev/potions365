@@ -54,10 +54,10 @@ def get_bottle_plan():
         result = connection.execute(sqlalchemy.text(inventory_check_sql)).scalar()
 
         if result >= 100:
-            return {
+            return [{
                 "potion_type": [0, 100, 0, 0],
                 "quantity": result // 100
-            }
+            }]
     return []
 
 if __name__ == "__main__":
