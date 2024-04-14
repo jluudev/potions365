@@ -119,24 +119,37 @@ class CartCheckout(BaseModel):
 def checkout(cart_id: int, cart_checkout: CartCheckout):
     """ """
     with db.engine.begin() as connection:
-        inventory_result = connection.execute(sqlalchemy.text("SELECT num_green_potions, gold FROM global_inventory"))
+        inventory_result = connection.execute(sqlalchemy.text("SELECT num_green_potions, num_red_potions, num_blue_potions, gold FROM global_inventory"))
         inventory_row = inventory_result.first()
+        
         if inventory_row:
-            num_green_potions = inventory_row.num_green_potions
-            number_purchased = carts[cart_id]["quantity"] if carts[cart_id]["quantity"] <= num_green_potions else num_green_potions
-            potion_price = 50  # Hard coded
-            total_cost = number_purchased * potion_price
+            num_green_potions, num_red_potions, num_blue_potions, gold = inventory_row
             
-            # Only do if there's enough potions
-            if number_purchased > 0:
+            green_quantity = carts[cart_id]["quantity"]
+            red_quantity = carts[cart_id]["quantity"]
+            blue_quantity = carts[cart_id]["quantity"]
+            
+            potion_price = 50  # Hard coded
+            total_cost = (green_quantity + red_quantity + blue_quantity) * potion_price
+
+            if (green_quantity <= num_green_potions) and (red_quantity <= num_red_potions) and (blue_quantity <= num_blue_potions):
                 update_result = connection.execute(sqlalchemy.text("""
                     UPDATE global_inventory
-                    SET num_green_potions = num_green_potions - :number_purchased,
+                    SET num_green_potions = num_green_potions - :green_quantity,
+                        num_red_potions = num_red_potions - :red_quantity,
+                        num_blue_potions = num_blue_potions - :blue_quantity,
                         gold = gold + :total_cost
-                    WHERE num_green_potions >= :number_purchased
-                """), {"number_purchased": number_purchased, "total_cost": total_cost})
-                
+                    WHERE num_green_potions >= :green_quantity
+                        AND num_red_potions >= :red_quantity
+                        AND num_blue_potions >= :blue_quantity
+                """), {
+                    "green_quantity": green_quantity,
+                    "red_quantity": red_quantity,
+                    "blue_quantity": blue_quantity,
+                    "total_cost": total_cost
+                })
+
                 if update_result.rowcount > 0:
-                    return {"total_potions_bought": number_purchased, "total_gold_paid": total_cost}
+                    return {"total_potions_bought": green_quantity + red_quantity + blue_quantity, "total_gold_paid": total_cost}
         
     return {"total_potions_bought": 0, "total_gold_paid": 0}

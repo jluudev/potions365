@@ -22,37 +22,65 @@ class Barrel(BaseModel):
 @router.post("/deliver/{order_id}")
 def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
     """ """
-    # Calculate the total ml of green potion delivered and gold
-    total_ml_delivered = sum(barrel.ml_per_barrel * barrel.quantity for barrel in barrels_delivered if "GREEN" in barrel.sku)
-    new_gold = sum(barrel.price * barrel.quantity for barrel in barrels_delivered if "GREEN" in barrel.sku)
+    total_green_ml_delivered = sum(barrel.ml_per_barrel * barrel.quantity for barrel in barrels_delivered if "GREEN" in barrel.sku)
+    total_red_ml_delivered = sum(barrel.ml_per_barrel * barrel.quantity for barrel in barrels_delivered if "RED" in barrel.sku)
+    total_blue_ml_delivered = sum(barrel.ml_per_barrel * barrel.quantity for barrel in barrels_delivered if "BLUE" in barrel.sku)
+    
+    new_gold = sum(barrel.price * barrel.quantity for barrel in barrels_delivered)
+
     with db.engine.begin() as connection:
         sql_to_execute = """
             UPDATE global_inventory
-            SET num_green_ml = num_green_ml + :ml_added, gold = gold - :sub_gold
+            SET num_green_ml = num_green_ml + :green_ml_added,
+                num_red_ml = num_red_ml + :red_ml_added,
+                num_blue_ml = num_blue_ml + :blue_ml_added,
+                gold = gold - :sub_gold
         """
-        connection.execute(sqlalchemy.text(sql_to_execute), {"ml_added" : total_ml_delivered, "sub_gold" : new_gold})
+        connection.execute(sqlalchemy.text(sql_to_execute), {
+            "green_ml_added": total_green_ml_delivered,
+            "red_ml_added": total_red_ml_delivered,
+            "blue_ml_added": total_blue_ml_delivered,
+            "sub_gold": new_gold
+        })
 
-    print(f"barrels delievered: {barrels_delivered} order_id: {order_id}")
+    print(f"Barrels delivered: {barrels_delivered}, Order ID: {order_id}")
 
     return "OK"
+
 
 # Gets called once a day
 @router.post("/plan")
 def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     """ """
-    print(wholesale_catalog)
-
     plan = []
-    sql_to_execute = """SELECT num_green_potions, gold, num_green_ml FROM global_inventory"""
+    sql_to_execute = """SELECT num_green_potions, num_red_potions, num_blue_potions, gold, num_green_ml, num_red_ml, num_blue_ml FROM global_inventory"""
     with db.engine.begin() as connection:
-        num_green_potions, gold, num_green_ml = connection.execute(sqlalchemy.text(sql_to_execute)).first()
+        result = connection.execute(sqlalchemy.text(sql_to_execute)).first()
+        if result:
+            num_green_potions, num_red_potions, num_blue_potions, gold, num_green_ml, num_red_ml, num_blue_ml = result
 
-        if num_green_potions < 10:
-            for barrel in wholesale_catalog:
-                if "SMALL_GREEN_BARREL" in barrel.sku and gold >= barrel.price and (num_green_ml + barrel.ml_per_barrel) <= 10000:
-                    plan.append({"sku": barrel.sku, "quantity": (gold // barrel.price)})
-                    break 
+            # Green
+            if num_green_potions < 10:
+                for barrel in wholesale_catalog:
+                    if "SMALL_GREEN_BARREL" in barrel.sku and gold >= barrel.price and (num_green_ml + barrel.ml_per_barrel) <= 10000:
+                        plan.append({"sku": barrel.sku, "quantity": (gold // barrel.price)})
+                        break
+
+            # Red
+            if num_red_potions < 10:
+                for barrel in wholesale_catalog:
+                    if "SMALL_RED_BARREL" in barrel.sku and gold >= barrel.price and (num_red_ml + barrel.ml_per_barrel) <= 10000:
+                        plan.append({"sku": barrel.sku, "quantity": (gold // barrel.price)})
+                        break
+
+            # Blue
+            if num_blue_potions < 10:
+                for barrel in wholesale_catalog:
+                    if "SMALL_BLUE_BARREL" in barrel.sku and gold >= barrel.price and (num_blue_ml + barrel.ml_per_barrel) <= 10000:
+                        plan.append({"sku": barrel.sku, "quantity": (gold // barrel.price)})
+                        break
 
     return plan
+
 
 
