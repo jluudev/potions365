@@ -59,30 +59,33 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
         if result:
             num_green_potions, num_red_potions, num_blue_potions, gold, num_green_ml, num_red_ml, num_blue_ml = result
 
+            inventory_data = {
+                'GREEN': {'potion_count': num_green_potions, 'ml': num_green_ml},
+                'RED': {'potion_count': num_red_potions, 'ml': num_red_ml},
+                'BLUE': {'potion_count': num_blue_potions, 'ml': num_blue_ml}
+            }
+
             potential_purchases = []
             for barrel in wholesale_catalog:
-                for color, potion_count, ml in [('GREEN', num_green_potions, num_green_ml), ('RED', num_red_potions, num_red_ml), ('BLUE', num_blue_potions, num_blue_ml)]:
-                    if f"SMALL_{color}_BARREL" in barrel.sku and potion_count < 10 and gold >= barrel.price and (ml + barrel.ml_per_barrel) <= 10000:
-                        potential_purchases.append({
-                            "sku": barrel.sku,
-                            "price": barrel.price,
-                            "ml_per_barrel": barrel.ml_per_barrel,
-                            "color": color,
-                            "urgency": 10 - potion_count  # More urgent if fewer potions
-                        })
+                color = barrel.sku.split('_')[1]
+                if "SMALL" in barrel.sku and inventory_data[color]['potion_count'] < 10 and gold >= barrel.price and (inventory_data[color]['ml'] + barrel.ml_per_barrel) <= 10000:
+                    potential_purchases.append({
+                        "barrel": barrel,
+                        "urgency": 10 - inventory_data[color]['potion_count']  # More urgent if fewer potions
+                    })
+
+            # Sort by urgency and then by price
+            potential_purchases.sort(key=lambda x: (-x['urgency'], x['barrel'].price))
 
             for purchase in potential_purchases:
-                if gold >= purchase['price'] and (num := eval(f"num_{purchase['color'].lower()}_ml") + purchase['ml_per_barrel']) <= 10000:
-                    plan.append({"sku": purchase['sku'], 
-                                 "quantity": gold // purchase['price']
-                                 })
-                    gold -= purchase['price'] * (gold // purchase['price'])
-                    exec(f"num_{purchase['color'].lower()}_ml = num")
+                max_quantity = min(gold // purchase['barrel'].price, purchase['barrel'].quantity) 
+                if max_quantity > 0:
+                    total_price = purchase['barrel'].price * max_quantity
+                    total_ml = purchase['barrel'].ml_per_barrel * max_quantity
+
+                    if (inventory_data[purchase['barrel'].sku.split('_')[1]]['ml'] + total_ml) <= 10000:
+                        plan.append({"sku": purchase['barrel'].sku, "quantity": max_quantity})
+                        gold -= total_price
+                        inventory_data[purchase['barrel'].sku.split('_')[1]]['ml'] += total_ml
 
     return plan
-
-
-
-
-
-
