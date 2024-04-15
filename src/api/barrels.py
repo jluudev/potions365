@@ -58,29 +58,22 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
         result = connection.execute(sqlalchemy.text(sql_to_execute)).first()
         if result:
             num_green_potions, num_red_potions, num_blue_potions, gold, num_green_ml, num_red_ml, num_blue_ml = result
+            
+            for barrel in wholesale_catalog:
+                if "SMALL_GREEN_BARREL" in barrel.sku and num_green_potions < 10 and gold >= barrel.price and (num_green_ml + barrel.ml_per_barrel) <= 10000:
+                    plan.append({"sku": barrel.sku, "quantity": (gold // barrel.price)})
+                    break
 
-            # Green
-            if num_green_potions < 10:
-                for barrel in wholesale_catalog:
-                    if "SMALL_GREEN_BARREL" in barrel.sku and gold >= barrel.price and (num_green_ml + barrel.ml_per_barrel) <= 10000:
-                        plan.append({"sku": barrel.sku, "quantity": (gold // barrel.price)})
-                        break
+                elif "SMALL_RED_BARREL" in barrel.sku and num_red_potions < 10 and gold >= barrel.price and (num_red_ml + barrel.ml_per_barrel) <= 10000:
+                    plan.append({"sku": barrel.sku, "quantity": (gold // barrel.price)})
+                    break
 
-            # Red
-            if num_red_potions < 10:
-                for barrel in wholesale_catalog:
-                    if "SMALL_RED_BARREL" in barrel.sku and gold >= barrel.price and (num_red_ml + barrel.ml_per_barrel) <= 10000:
-                        plan.append({"sku": barrel.sku, "quantity": (gold // barrel.price)})
-                        break
-
-            # Blue
-            if num_blue_potions < 10:
-                for barrel in wholesale_catalog:
-                    if "SMALL_BLUE_BARREL" in barrel.sku and gold >= barrel.price and (num_blue_ml + barrel.ml_per_barrel) <= 10000:
-                        plan.append({"sku": barrel.sku, "quantity": (gold // barrel.price)})
-                        break
+                elif "SMALL_BLUE_BARREL" in barrel.sku and num_blue_potions < 10 and gold >= barrel.price and (num_blue_ml + barrel.ml_per_barrel) <= 10000:
+                    plan.append({"sku": barrel.sku, "quantity": (gold // barrel.price)})
+                    break
 
     return plan
+
 
 
 
