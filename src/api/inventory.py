@@ -22,7 +22,7 @@ def get_inventory():
 
     return {
         "number_of_potions": total_potions,
-        "ml_in_barrels": ml_in_barrels,
+        "ml_in_barrels": ml_in_barrels if ml_in_barrels <= 10000 else 10000,
         "gold": result.gold
     }
 
