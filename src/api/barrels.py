@@ -58,21 +58,30 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
         result = connection.execute(sqlalchemy.text(sql_to_execute)).first()
         if result:
             num_green_potions, num_red_potions, num_blue_potions, gold, num_green_ml, num_red_ml, num_blue_ml = result
-            
+
+            potential_purchases = []
             for barrel in wholesale_catalog:
-                if "SMALL_GREEN_BARREL" in barrel.sku and num_green_potions < 10 and gold >= barrel.price and (num_green_ml + barrel.ml_per_barrel) <= 10000:
-                    plan.append({"sku": barrel.sku, "quantity": (gold // barrel.price)})
-                    break
+                for color, potion_count, ml in [('GREEN', num_green_potions, num_green_ml), ('RED', num_red_potions, num_red_ml), ('BLUE', num_blue_potions, num_blue_ml)]:
+                    if f"SMALL_{color}_BARREL" in barrel.sku and potion_count < 10 and gold >= barrel.price and (ml + barrel.ml_per_barrel) <= 10000:
+                        potential_purchases.append({
+                            "sku": barrel.sku,
+                            "price": barrel.price,
+                            "ml_per_barrel": barrel.ml_per_barrel,
+                            "color": color,
+                            "urgency": 10 - potion_count  # More urgent if fewer potions
+                        })
 
-                elif "SMALL_RED_BARREL" in barrel.sku and num_red_potions < 10 and gold >= barrel.price and (num_red_ml + barrel.ml_per_barrel) <= 10000:
-                    plan.append({"sku": barrel.sku, "quantity": (gold // barrel.price)})
-                    break
-
-                elif "SMALL_BLUE_BARREL" in barrel.sku and num_blue_potions < 10 and gold >= barrel.price and (num_blue_ml + barrel.ml_per_barrel) <= 10000:
-                    plan.append({"sku": barrel.sku, "quantity": (gold // barrel.price)})
-                    break
+            for purchase in potential_purchases:
+                if gold >= purchase['price'] and (num := eval(f"num_{purchase['color'].lower()}_ml") + purchase['ml_per_barrel']) <= 10000:
+                    plan.append({"sku": purchase['sku'], 
+                                 "quantity": gold // purchase['price']
+                                 })
+                    gold -= purchase['price'] * (gold // purchase['price'])
+                    exec(f"num_{purchase['color'].lower()}_ml = num")
 
     return plan
+
+
 
 
 
