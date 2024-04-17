@@ -109,7 +109,7 @@ def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
     carts[cart_id]["sku"] = item_sku
     carts[cart_id]["quantity"] = cart_item.quantity
     
-    return "OK"
+    return carts[cart_id]
 
 
 class CartCheckout(BaseModel):
@@ -125,23 +125,21 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
         if inventory_row:
             num_green_potions, num_red_potions, num_blue_potions, gold = inventory_row
             
-            green_quantity = carts[cart_id]["quantity"]
-            red_quantity = carts[cart_id]["quantity"]
-            blue_quantity = carts[cart_id]["quantity"]
+            green_quantity = carts[cart_id]["quantity"] if "GREEN" in carts[cart_id]["sku"] else 0
+            red_quantity = carts[cart_id]["quantity"] if "RED" in carts[cart_id]["sku"] else 0
+            blue_quantity = carts[cart_id]["quantity"] if "BLUE" in carts[cart_id]["sku"] else 0
             
             potion_price = 50  # Hard coded
             total_cost = (green_quantity + red_quantity + blue_quantity) * potion_price
-
+            print(green_quantity, red_quantity, blue_quantity, total_cost)
+            print(green_quantity <= num_green_potions) and (red_quantity <= num_red_potions) and (blue_quantity <= num_blue_potions)
             if (green_quantity <= num_green_potions) and (red_quantity <= num_red_potions) and (blue_quantity <= num_blue_potions):
-                update_result = connection.execute(sqlalchemy.text("""
+                connection.execute(sqlalchemy.text("""
                     UPDATE global_inventory
                     SET num_green_potions = num_green_potions - :green_quantity,
                         num_red_potions = num_red_potions - :red_quantity,
                         num_blue_potions = num_blue_potions - :blue_quantity,
                         gold = gold + :total_cost
-                    WHERE num_green_potions >= :green_quantity
-                        AND num_red_potions >= :red_quantity
-                        AND num_blue_potions >= :blue_quantity
                 """), {
                     "green_quantity": green_quantity,
                     "red_quantity": red_quantity,
@@ -149,7 +147,6 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
                     "total_cost": total_cost
                 })
 
-                if update_result.rowcount > 0:
-                    return {"total_potions_bought": green_quantity + red_quantity + blue_quantity, "total_gold_paid": total_cost}
-        
+                return {"total_potions_bought": (green_quantity + red_quantity + blue_quantity), "total_gold_paid": total_cost}
+    print("nothing happened")
     return {"total_potions_bought": 0, "total_gold_paid": 0}
