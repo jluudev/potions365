@@ -15,15 +15,21 @@ router = APIRouter(
 def get_inventory():
     """ """
     with db.engine.begin() as connection:
-      result = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory")).first()
+        global_inventory_result = connection.execute(sqlalchemy.text("SELECT * FROM global_inventory")).first()
+        
+        total_potions_result = connection.execute(sqlalchemy.text("SELECT SUM(quantity) AS total_potions FROM potions")).first()
     
-    total_potions = result.num_green_potions + result.num_red_potions + result.num_blue_potions
-    ml_in_barrels = result.num_green_ml + result.num_red_ml + result.num_blue_ml
+    total_potions = total_potions_result.total_potions if total_potions_result else 0
+
+    ml_in_barrels = (global_inventory_result.num_green_ml + global_inventory_result.num_red_ml + global_inventory_result.num_blue_ml + global_inventory_result.num_dark_ml) if global_inventory_result else 0
+
+    total_potions = min(total_potions, 50)
+    ml_in_barrels = min(ml_in_barrels, 10000)
 
     return {
         "number_of_potions": total_potions,
-        "ml_in_barrels": ml_in_barrels if ml_in_barrels <= 10000 else 10000,
-        "gold": result.gold
+        "ml_in_barrels": ml_in_barrels,
+        "gold": global_inventory_result.gold if global_inventory_result else 0
     }
 
 # Gets called once a day
