@@ -98,36 +98,29 @@ def get_bottle_plan():
         for potion_data in potions_result:
             red_quantity, green_quantity, blue_quantity, dark_quantity, quantity = potion_data
 
-            # Ensure the quantity is not greater than 10
-            if quantity <= 10 and num_potions_listed < 5:
+            if quantity <= 10 and num_potions_listed < 6:
                 # Calculate the total ml for this potion type
                 total_red_ml = red_quantity
                 total_green_ml = green_quantity
                 total_blue_ml = blue_quantity
                 total_dark_ml = dark_quantity
 
-                # Check if there's enough ml of each color to bottle this potion type
-                if (total_red_ml > 0 and
-                    total_green_ml > 0 and
-                    total_blue_ml > 0 and
-                    total_dark_ml > 0 and
-                    total_red_ml <= num_red_ml and
-                    total_green_ml <= num_green_ml and
-                    total_blue_ml <= num_blue_ml and
-                    total_dark_ml <= num_dark_ml):
-                    
-                    # Calculate the number of bottles that can be filled for this potion type
-                    bottles_quantity = min(
-                        num_red_ml // total_red_ml,
-                        num_green_ml // total_green_ml,
-                        num_blue_ml // total_blue_ml,
-                        num_dark_ml // total_dark_ml
+                # Check if there's enough ml of each color to bottle this potion type, some potions may be all of one color or a mix of colors in different quantities, then calculate the number of bottles that can be filled, and add the potion type to the plan
+                if num_red_ml >= total_red_ml and num_green_ml >= total_green_ml and num_blue_ml >= total_blue_ml and num_dark_ml >= total_dark_ml:
+                    num_bottles = max(
+                        num_red_ml // ml_per_bottle,
+                        num_green_ml // ml_per_bottle,
+                        num_blue_ml // ml_per_bottle,
+                        num_dark_ml // ml_per_bottle,
                     )
-
-                    if bottles_quantity > 0:
-                        potion_type = [red_quantity, green_quantity, blue_quantity, dark_quantity]
-                        bottle_plan.append({"potion_type": potion_type, "quantity": bottles_quantity})
-                        num_potions_listed += 1
+                    bottle_plan.append(
+                        {
+                            "potion_type": [red_quantity, green_quantity, blue_quantity, dark_quantity],
+                            "quantity": num_bottles
+                        }
+                    )
+                    num_potions_listed += 1
+                
 
         return bottle_plan
 
