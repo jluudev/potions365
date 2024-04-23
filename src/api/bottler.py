@@ -72,8 +72,7 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
 
 @router.post("/plan")
 def get_bottle_plan():
-    ml_per_bottle = 100  # Milliliters per bottle
-    ml_reserve_percentage = 0.2 # Percentage of ml to reserve
+    ml_reserve_percentage = 0.2  # Percentage of ml to reserve
 
     with db.engine.begin() as connection:
         # Fetch potion types and their quantities from the potions table
@@ -94,51 +93,46 @@ def get_bottle_plan():
 
         bottle_plan = []
 
-        num_potions_listed = 0
+        total_red_ml_required = sum(potion_data[0] for potion_data in potions_result)
+        total_green_ml_required = sum(potion_data[1] for potion_data in potions_result)
+        total_blue_ml_required = sum(potion_data[2] for potion_data in potions_result)
+        total_dark_ml_required = sum(potion_data[3] for potion_data in potions_result)
+
+        reserve_red_ml = int(ml_reserve_percentage * total_red_ml_required)
+        reserve_green_ml = int(ml_reserve_percentage * total_green_ml_required)
+        reserve_blue_ml = int(ml_reserve_percentage * total_blue_ml_required)
+        reserve_dark_ml = int(ml_reserve_percentage * total_dark_ml_required)
+
+        available_red_ml = num_red_ml - reserve_red_ml
+        available_green_ml = num_green_ml - reserve_green_ml
+        available_blue_ml = num_blue_ml - reserve_blue_ml
+        available_dark_ml = num_dark_ml - reserve_dark_ml
+
         for potion_data in potions_result:
             red_quantity, green_quantity, blue_quantity, dark_quantity, quantity = potion_data
 
-            if quantity <= 10 and num_potions_listed < 6:
-                # Calculate the total ml for this potion type
-                total_red_ml = red_quantity
-                total_green_ml = green_quantity
-                total_blue_ml = blue_quantity
-                total_dark_ml = dark_quantity
-
-                # Calculate the amount of ml to reserve
-                reserve_red_ml = int(ml_reserve_percentage * total_red_ml)
-                reserve_green_ml = int(ml_reserve_percentage * total_green_ml)
-                reserve_blue_ml = int(ml_reserve_percentage * total_blue_ml)
-                reserve_dark_ml = int(ml_reserve_percentage * total_dark_ml)
-
-                # Calculate the available ml for bottling
-                available_red_ml = num_red_ml - reserve_red_ml
-                available_green_ml = num_green_ml - reserve_green_ml
-                available_blue_ml = num_blue_ml - reserve_blue_ml
-                available_dark_ml = num_dark_ml - reserve_dark_ml
-
-                # Check if there's enough ml of each color to bottle this potion type, some potions may be all of one color or a mix of colors in different quantities, then calculate the number of bottles that can be filled, and add the potion type to the plan
-                if (available_red_ml >= total_red_ml and
-                    available_green_ml >= total_green_ml and
-                    available_blue_ml >= total_blue_ml and
-                    available_dark_ml >= total_dark_ml):
-                    num_bottles = max(
-                        available_red_ml // ml_per_bottle,
-                        available_green_ml // ml_per_bottle,
-                        available_blue_ml // ml_per_bottle,
-                        available_dark_ml // ml_per_bottle
+            if quantity <= 5:
+                # Check if there's enough ml of each color to bottle this potion type
+                if (red_quantity <= available_red_ml and
+                    green_quantity <= available_green_ml and
+                    blue_quantity <= available_blue_ml and
+                    dark_quantity <= available_dark_ml):
+                    bottle_plan.append(
+                        {
+                            "potion_type": [red_quantity, green_quantity, blue_quantity, dark_quantity],
+                            "quantity": 1
+                        }
                     )
-                    if num_bottles > 0:
-                        bottle_plan.append(
-                            {
-                                "potion_type": [red_quantity, green_quantity, blue_quantity, dark_quantity],
-                                "quantity": num_bottles
-                            }
-                        )
-                    num_potions_listed += 1
-                
+
+                    # Update the available ml for each color
+                    available_red_ml -= red_quantity
+                    available_green_ml -= green_quantity
+                    available_blue_ml -= blue_quantity
+                    available_dark_ml -= dark_quantity
 
         return bottle_plan
+
+
 
 
 if __name__ == "__main__":
