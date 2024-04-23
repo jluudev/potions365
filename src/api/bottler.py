@@ -98,6 +98,7 @@ def get_bottle_plan():
         total_green_ml_required = sum(potion_data[1] for potion_data in potions_result)
         total_blue_ml_required = sum(potion_data[2] for potion_data in potions_result)
         total_dark_ml_required = sum(potion_data[3] for potion_data in potions_result)
+        total_potions_in_table = sum(potion_data[4] for potion_data in potions_result)
 
         reserve_red_ml = int(ml_reserve_percentage * total_red_ml_required)
         reserve_green_ml = int(ml_reserve_percentage * total_green_ml_required)
@@ -112,7 +113,7 @@ def get_bottle_plan():
         for potion_data in potions_result:
             red_quantity, green_quantity, blue_quantity, dark_quantity, quantity = potion_data
 
-            if quantity <= 5:
+            if quantity <= 5 and total_potions_in_table <= 50:
                 # Check if there's enough ml of each color to bottle this potion type
                 if (red_quantity <= available_red_ml or red_quantity == 0) and \
                    (green_quantity <= available_green_ml or green_quantity == 0) and \
