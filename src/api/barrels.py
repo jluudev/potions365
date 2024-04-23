@@ -77,7 +77,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
             sorted_catalog = sorted(filtered_catalog, key=lambda barrel: barrel.price)
 
             for potion_sku in most_needed_potions:
-                if potion_inventory.get(potion_sku, 0) < 50:  # Check if potion type needs to be replenished
+                if potion_inventory.get(potion_sku, 0) < 6:  # Check if potion type needs to be replenished
                     ml_needed = max(0, 10000 - (num_green_ml + num_red_ml + num_blue_ml + num_dark_ml))
                     for barrel in sorted_catalog:
                         if (barrel.ml_per_barrel > 0 and (num_green_ml + num_red_ml + num_blue_ml + num_dark_ml + barrel.ml_per_barrel <= 10000)
