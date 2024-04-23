@@ -55,13 +55,12 @@ def post_deliver_barrels(barrels_delivered: list[Barrel], order_id: int):
 @router.post("/plan")
 def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     plan = []
+    colors_in_plan = set()  # Set to keep track of colors
     with db.engine.begin() as connection:
-        # Retrieve global inventory data
         result = connection.execute(sqlalchemy.text("SELECT gold, num_green_ml, num_red_ml, num_blue_ml, num_dark_ml FROM global_inventory")).first()
         if result:
             gold, num_green_ml, num_red_ml, num_blue_ml, num_dark_ml = result
 
-            # Retrieve potion inventory data
             potion_inventory = {}
             potion_data = connection.execute(sqlalchemy.text("SELECT name, quantity FROM potions")).fetchall()
             for potion in potion_data:
@@ -70,27 +69,37 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
 
             most_needed_potions = sorted(potion_inventory.keys(), key=lambda sku: potion_inventory[sku], reverse=True)[:6]
 
-            # Filter out MINI barrels and barrels producing the most needed potions from the catalog
+            # Filter out MINI barrels
             filtered_catalog = [barrel for barrel in wholesale_catalog if "MINI" not in barrel.sku and barrel.sku not in most_needed_potions]
 
-            # Sort the catalog by price
-            sorted_catalog = sorted(filtered_catalog, key=lambda barrel: barrel.price)
+            sorted_catalog = sorted(filtered_catalog, key=lambda barrel: barrel.price / barrel.ml_per_barrel if barrel.ml_per_barrel > 0 else float('inf'))
 
-            for potion_sku in most_needed_potions:
-                if potion_inventory.get(potion_sku, 0) < 6:  # Check if potion type needs to be replenished
-                    ml_needed = max(0, 10000 - (num_green_ml + num_red_ml + num_blue_ml + num_dark_ml))
-                    for barrel in sorted_catalog:
-                        if (barrel.ml_per_barrel > 0 and (num_green_ml + num_red_ml + num_blue_ml + num_dark_ml + barrel.ml_per_barrel <= 10000)
-                                and (gold >= barrel.price) and (potion_inventory.get(potion_sku, 0) < 50)):
-                            max_quantity = min(gold // barrel.price, barrel.quantity, (50 - potion_inventory.get(potion_sku, 0)), ml_needed // barrel.ml_per_barrel)
-                            if max_quantity > 0:
-                                total_price = barrel.price * max_quantity
-                                plan.append({"sku": barrel.sku, "quantity": max_quantity})
-                                gold -= total_price
-                                potion_inventory[potion_sku] = potion_inventory.get(potion_sku, 0) + max_quantity
-                                ml_needed -= max_quantity * barrel.ml_per_barrel
+            dark_barrel_added = False
+
+            for barrel in sorted_catalog:
+                color = barrel.sku.split("_")[1].upper()
+                # If a dark barrel is available and hasn't been added yet, prioritize it
+                if color == "DARK" and not dark_barrel_added:
+                    if (barrel.ml_per_barrel > 0 and (num_green_ml + num_red_ml + num_blue_ml + num_dark_ml + barrel.ml_per_barrel <= 10000)
+                            and (gold >= barrel.price)):
+                        plan.append({"sku": barrel.sku, "quantity": 1}) # Only every buy 1 barrel for now
+                        colors_in_plan.add(color)
+                        gold -= barrel.price
+                        dark_barrel_added = True
+
+                elif color not in colors_in_plan:
+                    if (barrel.ml_per_barrel > 0 and (num_green_ml + num_red_ml + num_blue_ml + num_dark_ml + barrel.ml_per_barrel <= 10000)
+                            and (gold >= barrel.price)):
+                        plan.append({"sku": barrel.sku, "quantity": 1}) # Only every buy 1 barrel for now
+                        colors_in_plan.add(color)
+                        gold -= barrel.price
+
+                # If all colors are already in the plan, stop adding barrels
+                if len(colors_in_plan) == 4:
+                    break
 
     return plan
+
 
 
 
