@@ -73,8 +73,8 @@ def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int
 @router.post("/plan")
 def get_bottle_plan():
     ml_per_bottle = 100  # Milliliters per bottle
+    ml_reserve_percentage = 0.2 # Percentage of ml to reserve
 
-    # Fetch the quantities of each potion type and available ml from the global_inventory table
     with db.engine.begin() as connection:
         # Fetch potion types and their quantities from the potions table
         potion_query = """
@@ -105,13 +105,28 @@ def get_bottle_plan():
                 total_blue_ml = blue_quantity
                 total_dark_ml = dark_quantity
 
+                # Calculate the amount of ml to reserve
+                reserve_red_ml = int(ml_reserve_percentage * total_red_ml)
+                reserve_green_ml = int(ml_reserve_percentage * total_green_ml)
+                reserve_blue_ml = int(ml_reserve_percentage * total_blue_ml)
+                reserve_dark_ml = int(ml_reserve_percentage * total_dark_ml)
+
+                # Calculate the available ml for bottling
+                available_red_ml = num_red_ml - reserve_red_ml
+                available_green_ml = num_green_ml - reserve_green_ml
+                available_blue_ml = num_blue_ml - reserve_blue_ml
+                available_dark_ml = num_dark_ml - reserve_dark_ml
+
                 # Check if there's enough ml of each color to bottle this potion type, some potions may be all of one color or a mix of colors in different quantities, then calculate the number of bottles that can be filled, and add the potion type to the plan
-                if num_red_ml >= total_red_ml and num_green_ml >= total_green_ml and num_blue_ml >= total_blue_ml and num_dark_ml >= total_dark_ml:
+                if (available_red_ml >= total_red_ml and
+                    available_green_ml >= total_green_ml and
+                    available_blue_ml >= total_blue_ml and
+                    available_dark_ml >= total_dark_ml):
                     num_bottles = max(
-                        num_red_ml // ml_per_bottle,
-                        num_green_ml // ml_per_bottle,
-                        num_blue_ml // ml_per_bottle,
-                        num_dark_ml // ml_per_bottle,
+                        available_red_ml // ml_per_bottle,
+                        available_green_ml // ml_per_bottle,
+                        available_blue_ml // ml_per_bottle,
+                        available_dark_ml // ml_per_bottle
                     )
                     bottle_plan.append(
                         {
