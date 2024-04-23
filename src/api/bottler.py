@@ -128,12 +128,13 @@ def get_bottle_plan():
                         available_blue_ml // ml_per_bottle,
                         available_dark_ml // ml_per_bottle
                     )
-                    bottle_plan.append(
-                        {
-                            "potion_type": [red_quantity, green_quantity, blue_quantity, dark_quantity],
-                            "quantity": num_bottles
-                        }
-                    )
+                    if num_bottles > 0:
+                        bottle_plan.append(
+                            {
+                                "potion_type": [red_quantity, green_quantity, blue_quantity, dark_quantity],
+                                "quantity": num_bottles
+                            }
+                        )
                     num_potions_listed += 1
                 
 
