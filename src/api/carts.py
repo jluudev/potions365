@@ -129,48 +129,78 @@ class CartCheckout(BaseModel):
 def checkout(cart_id: int, cart_checkout: CartCheckout):
     """ """
     with db.engine.begin() as connection:
-        # Fetch cart items with their associated potion IDs and quantities
-        cart_items_result = connection.execute(
-            sqlalchemy.text("SELECT potion_id, quantity FROM cart_items WHERE cart_id = :cart_id"),
-            {"cart_id": cart_id}
-        )
+        total_potions_bought = 0
+        total_gold_paid = 0
+
+        # Insert a new inventory transaction
+        global_transaction_id = connection.execute(sqlalchemy.text("""
+            INSERT INTO inventory_transactions DEFAULT VALUES
+            RETURNING id
+        """)).scalar()
+
+        connection.execute(sqlalchemy.text("""
+            UPDATE carts
+            SET payment = :payment, inventory_transaction_id = :global_transaction_id
+            WHERE id = :cart_id
+        """), {"payment": cart_checkout.payment, "global_transaction_id": global_transaction_id, "cart_id": cart_id})
+
+        cart_items_result = connection.execute(sqlalchemy.text("""
+            SELECT potion_id, quantity
+            FROM cart_items
+            WHERE cart_id = :cart_id
+        """), {"cart_id": cart_id})
+
         cart_items = cart_items_result.fetchall()
 
-        # Calculate total cost
-        total_cost = 0
-        for potion_id, quantity in cart_items:
-            # Retrieve potion price from the potions table
-            potion_price_result = connection.execute(
-                sqlalchemy.text("SELECT price FROM potions WHERE id = :potion_id"),
-                {"potion_id": potion_id}
-            )
-            potion_price = potion_price_result.scalar()
-            total_cost += quantity * potion_price
+        for cart_item in cart_items:
+            potion_id, quantity = cart_item
 
-        # Deduct gold from global inventory
-        connection.execute(
-            sqlalchemy.text("UPDATE global_inventory SET gold = gold + :total_cost"),
-            {"total_cost": total_cost}
-        )
-        
-        # Subtract potions from global inventory
-        for potion_id, quantity in cart_items:
-            connection.execute(
-                sqlalchemy.text("UPDATE potions SET quantity = quantity - :quantity WHERE id = :potion_id"),
-                {"quantity": quantity, "potion_id": potion_id}
-            )
-        
+            potion_info = connection.execute(sqlalchemy.text("""
+                SELECT price, sku
+                FROM potions
+                WHERE id = :potion_id
+            """), {"potion_id": potion_id}).first()
+
+            if potion_info:
+                potion_price = potion_info.price
+                potion_sku = potion_info.sku
+
+                total_gold_paid += quantity * potion_price
+
+                total_potions_bought += quantity
+
+                # Insert potion transaction entry
+                potion_transaction_id = connection.execute(sqlalchemy.text("""
+                    INSERT INTO potions_transactions (description)
+                    VALUES (:description)
+                    RETURNING id
+                """), {"description": f"sold {quantity} {potion_sku}"}).scalar()
+
+                # Insert entry in potions_entries table
+                connection.execute(sqlalchemy.text("""
+                    INSERT INTO potions_entries (potion_sku, change, transaction_id)
+                    VALUES (:potion_id, :change, :potion_transaction_id)
+                """), {"potion_id": potion_sku, "change": -quantity, "potion_transaction_id": potion_transaction_id})
+
+        # Update inventory transaction description
+        connection.execute(sqlalchemy.text("""
+            UPDATE inventory_transactions
+            SET description = :description
+            WHERE id = :transaction_id
+        """), {"description": f"sold {total_potions_bought} potions", "transaction_id": global_transaction_id})
+
+        # Insert global inventory entry for gold deduction
+        connection.execute(sqlalchemy.text("""
+            INSERT INTO inventory_entries (change_gold, transaction_id)
+            VALUES (:total_gold_paid, :transaction_id)
+        """), {"total_gold_paid": total_gold_paid, "transaction_id": global_transaction_id})
+
         # Clear cart items
-        connection.execute(
-            sqlalchemy.text("DELETE FROM cart_items WHERE cart_id = :cart_id"),
-            {"cart_id": cart_id}
-        )
+        connection.execute(sqlalchemy.text("""
+            DELETE FROM cart_items
+            WHERE cart_id = :cart_id
+        """), {"cart_id": cart_id})
 
-        # Remove cart
-        connection.execute(
-            sqlalchemy.text("DELETE FROM carts WHERE id = :cart_id"),
-            {"cart_id": cart_id}
-        )
-        
-        return {"total_potions_bought": sum([quantity for _, quantity in cart_items]), "total_gold_paid": total_cost}
+    return {"total_potions_bought": total_potions_bought, "total_gold_paid": total_gold_paid}
+
 
