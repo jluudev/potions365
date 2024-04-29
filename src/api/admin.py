@@ -17,19 +17,7 @@ def reset():
     inventory, and all barrels are removed from inventory. Carts are all reset.
     """
 
-    sql_to_execute = """
-        -- Reset global inventory
-        UPDATE global_inventory
-        SET num_green_ml = 0,
-            num_red_ml = 0,
-            num_blue_ml = 0,
-            num_dark_ml = 0,
-            gold = 100;
-
-        -- Reset potions inventory
-        UPDATE potions
-        SET quantity = 0;
-
+    reset_carts = """
         -- Reset carts
         DELETE FROM carts;
 
@@ -37,9 +25,16 @@ def reset():
         DELETE FROM cart_items;
     """
 
-    # Execute the combined SQL statements within a single transaction
     with db.engine.begin() as connection:
-        connection.execute(sqlalchemy.text(sql_to_execute))
-
+        connection.execute(sqlalchemy.text(reset_carts))
+        connection.execute(sqlalchemy.text("TRUNCATE inventory_transactions CASCADE"))
+        connection.execute(sqlalchemy.text("TRUNCATE potions_transactions CASCADE"))
+        result = connection.execute(sqlalchemy.text("INSERT INTO inventory_transactions DEFAULT VALUES RETURNING id")).first()
+        transaction_id = result.id
+        connection.execute(sqlalchemy.text("""
+            INSERT INTO inventory_entries (transaction_id, change_gold, change_red_ml, change_green_ml, change_blue_ml, change_dark_ml)
+            VALUES (:transaction_id, 100, 0, 0, 0, 0)
+            """), {"transaction_id": transaction_id})
     return "OK"
+
 

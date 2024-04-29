@@ -16,60 +16,48 @@ class PotionInventory(BaseModel):
     potion_type: list[int]
     quantity: int
 
-@router.post("/deliver/{order_id}")
-def post_deliver_bottles(potions_delivered: list[PotionInventory], order_id: int):
-    print(f"Potions delivered: {potions_delivered}, Order ID: {order_id}")
-
-    # Dictionary to hold the total ml to subtract for each color
-    ml_to_subtract = {"red": 0, "green": 0, "blue": 0, "dark": 0}
-
-    # Calculate the total ml to subtract for each color based on delivered potions
-    for potion in potions_delivered:
-        for i, ml in enumerate(potion.potion_type):
-            ml_to_subtract["red"] += ml * potion.quantity if i == 0 else 0
-            ml_to_subtract["green"] += ml * potion.quantity if i == 1 else 0
-            ml_to_subtract["blue"] += ml * potion.quantity if i == 2 else 0
-            ml_to_subtract["dark"] += ml * potion.quantity if i == 3 else 0
-
-    # Update the global inventory with the new quantities and adjust the ml
-    sql_to_execute = """
-        UPDATE global_inventory
-        SET num_red_ml = num_red_ml - :red_ml_subtracted,
-            num_green_ml = num_green_ml - :green_ml_subtracted,
-            num_blue_ml = num_blue_ml - :blue_ml_subtracted,
-            num_dark_ml = num_dark_ml - :dark_ml_subtracted
-    """
-
-    update_potions_sql = """
-        UPDATE potions
-        SET quantity = quantity + :quantity
-        WHERE red = :red AND green = :green AND blue = :blue AND dark = :dark
-    """
-
+@router.post("/deliver")
+def post_deliver_bottles(potions_delivered: list[PotionInventory]):
     with db.engine.begin() as connection:
-        connection.execute(
-            sqlalchemy.text(sql_to_execute),
-            {
-                "red_ml_subtracted": ml_to_subtract["red"],
-                "green_ml_subtracted": ml_to_subtract["green"],
-                "blue_ml_subtracted": ml_to_subtract["blue"],
-                "dark_ml_subtracted": ml_to_subtract["dark"],
-            },
-        )
-        
+        total_used_ml = [0, 0, 0, 0]
+
         for potion in potions_delivered:
-            connection.execute(
-                sqlalchemy.text(update_potions_sql),
-                {
-                    "red": potion.potion_type[0],
-                    "green": potion.potion_type[1],
-                    "blue": potion.potion_type[2],
-                    "dark": potion.potion_type[3],
-                    "quantity": potion.quantity
-                }
-            )
+            potion_transaction_id = connection.execute(sqlalchemy.text("""
+                INSERT INTO potions_transactions (description)
+                VALUES (:description)
+                RETURNING id
+                """), {"description": f"Bottled: {potion}"}).first().id
+            
+            connection.execute(sqlalchemy.text("""
+                INSERT INTO potions_entries (potion_sku, change, transaction_id)
+                SELECT potions.sku, :change, :transaction_id
+                FROM potions WHERE potions.red = :red AND potions.green = :green 
+                AND potions.blue = :blue AND potions.dark = :dark
+                """), {"change": potion.quantity, "transaction_id": potion_transaction_id,
+                        "red": potion.potion_type[0], "green": potion.potion_type[1],
+                        "blue": potion.potion_type[2], "dark": potion.potion_type[3]})
+
+            for i in range(len(potion.potion_type)):
+                potion_ml = potion.potion_type[i] * potion.quantity  # Calculate the total ml used for the potion type
+                total_used_ml[i] += potion_ml
+
+        # Update global_inventory
+        transaction_id = connection.execute(sqlalchemy.text("""
+            INSERT INTO inventory_transactions (description)
+            VALUES (:description)
+            RETURNING id
+            """), {"description": f"Bottled: {potions_delivered}"}).first().id
+
+        connection.execute(sqlalchemy.text("""
+            INSERT INTO inventory_entries
+                (change_gold, change_red_ml, change_green_ml, change_blue_ml, change_dark_ml, transaction_id)
+            VALUES (:gold, :num_red_ml, :num_green_ml, :num_blue_ml, :num_dark_ml, :transaction_id)
+            """), {"gold": 0, "num_red_ml": -total_used_ml[0], "num_green_ml": -total_used_ml[1],
+                  "num_blue_ml": -total_used_ml[2], "num_dark_ml": -total_used_ml[3], "transaction_id": transaction_id})
 
     return "OK"
+
+
 
 @router.post("/plan")
 def get_bottle_plan():
@@ -77,58 +65,65 @@ def get_bottle_plan():
 
     with db.engine.begin() as connection:
         potion_query = """
-            SELECT red, green, blue, dark, quantity 
+            SELECT red, green, blue, dark, COALESCE(SUM(pe.change), 0) as total_potions_in_table
             FROM potions
+            LEFT JOIN potions_entries AS pe ON pe.potion_sku = potions.sku
+            GROUP BY red, green, blue, dark
         """
         potions_result = connection.execute(sqlalchemy.text(potion_query)).fetchall()
 
-        random.shuffle(potions_result)
-
-        inventory_query = """
-            SELECT num_red_ml, num_green_ml, num_blue_ml, num_dark_ml
-            FROM global_inventory
+        global_inventory_query = """
+            SELECT SUM(change_red_ml) as num_red_ml, SUM(change_green_ml) as num_green_ml,
+                   SUM(change_blue_ml) as num_blue_ml, SUM(change_dark_ml) as num_dark_ml
+            FROM inventory_entries
         """
-        inventory_result = connection.execute(sqlalchemy.text(inventory_query)).fetchone()
-        if inventory_result:
-            num_red_ml, num_green_ml, num_blue_ml, num_dark_ml = inventory_result
+        global_inventory_result = connection.execute(sqlalchemy.text(global_inventory_query)).fetchone()
+        if global_inventory_result:
+            num_red_ml, num_green_ml, num_blue_ml, num_dark_ml = global_inventory_result
 
         bottle_plan = []
+        total_potions_produced = 0
 
-        total_red_ml_required = sum(potion_data[0] for potion_data in potions_result)
-        total_green_ml_required = sum(potion_data[1] for potion_data in potions_result)
-        total_blue_ml_required = sum(potion_data[2] for potion_data in potions_result)
-        total_dark_ml_required = sum(potion_data[3] for potion_data in potions_result)
-        total_potions_in_table = sum(potion_data[4] for potion_data in potions_result)
+        # Calculate available ml for each color after reservation
+        available_red_ml = max(0, num_red_ml - int(ml_reserve_percentage * num_red_ml))
+        available_green_ml = max(0, num_green_ml - int(ml_reserve_percentage * num_green_ml))
+        available_blue_ml = max(0, num_blue_ml - int(ml_reserve_percentage * num_blue_ml))
+        available_dark_ml = max(0, num_dark_ml - int(ml_reserve_percentage * num_dark_ml))
 
-        reserve_red_ml = int(ml_reserve_percentage * total_red_ml_required)
-        reserve_green_ml = int(ml_reserve_percentage * total_green_ml_required)
-        reserve_blue_ml = int(ml_reserve_percentage * total_blue_ml_required)
-        reserve_dark_ml = int(ml_reserve_percentage * total_dark_ml_required)
-
-        available_red_ml = max(0, num_red_ml - reserve_red_ml)
-        available_green_ml = max(0, num_green_ml - reserve_green_ml)
-        available_blue_ml = max(0, num_blue_ml - reserve_blue_ml)
-        available_dark_ml = max(0, num_dark_ml - reserve_dark_ml)
+        # Shuffle results
+        random.shuffle(potions_result)
 
         for potion_data in potions_result:
-            red_quantity, green_quantity, blue_quantity, dark_quantity, quantity = potion_data
+            red_quantity, green_quantity, blue_quantity, dark_quantity, total_potions_in_table = potion_data
 
-            if quantity <= 5 and total_potions_in_table <= 50:
-                # Check if there's enough ml of each color to bottle this potion type
-                if (red_quantity <= available_red_ml or red_quantity == 0) and \
-                   (green_quantity <= available_green_ml or green_quantity == 0) and \
-                   (blue_quantity <= available_blue_ml or blue_quantity == 0) and \
-                   (dark_quantity <= available_dark_ml or dark_quantity == 0):
-                    try:
-                        num_bottles = min(
-                            5,
-                            available_red_ml // red_quantity if red_quantity > 0 else float('inf'),
-                            available_green_ml // green_quantity if green_quantity > 0 else float('inf'),
-                            available_blue_ml // blue_quantity if blue_quantity > 0 else float('inf'),
-                            available_dark_ml // dark_quantity if dark_quantity > 0 else float('inf')
-                        )
-                    except ZeroDivisionError:
-                        num_bottles = float('inf')
+            max_bottles_possible = min(
+                available_red_ml // red_quantity if red_quantity > 0 else float('inf'),
+                available_green_ml // green_quantity if green_quantity > 0 else float('inf'),
+                available_blue_ml // blue_quantity if blue_quantity > 0 else float('inf'),
+                available_dark_ml // dark_quantity if dark_quantity > 0 else float('inf')
+            )
+
+            # Determine the actual number of bottles to produce
+            num_bottles = min(max_bottles_possible, 5)
+
+            print("Available ml: ", available_red_ml, available_green_ml, available_blue_ml, available_dark_ml)
+
+            # Check if the sum of each potion index doesn't exceed available ml
+            if (
+                red_quantity * num_bottles <= available_red_ml and
+                green_quantity * num_bottles <= available_green_ml and
+                blue_quantity * num_bottles <= available_blue_ml and
+                dark_quantity * num_bottles <= available_dark_ml
+            ):
+                if num_bottles > 0:
+                    # Update the available ml for each color
+                    available_red_ml -= red_quantity * num_bottles
+                    available_green_ml -= green_quantity * num_bottles
+                    available_blue_ml -= blue_quantity * num_bottles
+                    available_dark_ml -= dark_quantity * num_bottles
+
+                    # Update total_potions_produced and bottle_plan
+                    total_potions_produced += num_bottles
                     bottle_plan.append(
                         {
                             "potion_type": [red_quantity, green_quantity, blue_quantity, dark_quantity],
@@ -136,17 +131,11 @@ def get_bottle_plan():
                         }
                     )
 
-                    # Update the available ml for each color
-                    if red_quantity > 0:
-                        available_red_ml -= red_quantity * num_bottles
-                    if green_quantity > 0:
-                        available_green_ml -= green_quantity * num_bottles
-                    if blue_quantity > 0:
-                        available_blue_ml -= blue_quantity * num_bottles
-                    if dark_quantity > 0:
-                        available_dark_ml -= dark_quantity * num_bottles
+            if (total_potions_produced + total_potions_in_table >= 30):
+                break
 
-        return bottle_plan
+    return bottle_plan
+
 
 if __name__ == "__main__":
     print(get_bottle_plan())

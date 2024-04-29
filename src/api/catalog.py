@@ -9,27 +9,34 @@ router = APIRouter()
 
 @router.get("/catalog/", tags=["catalog"])
 def get_catalog():
-    catalog_items = []
+    with db.engine.connect() as connection:
+        # Fetch all available potion types
+        sql_to_execute = sqlalchemy.text(
+            """
+            SELECT potions.sku, potions.price, potions.red AS red, potions.green AS green, potions.blue AS blue, potions.dark AS dark, COALESCE(SUM(pe.change), 0) AS quantity
+            FROM potions
+            LEFT JOIN potions_entries AS pe ON pe.potion_sku = potions.sku
+            GROUP BY potions.sku, potions.price, potions.red, potions.green, potions.blue, potions.dark
+            ORDER BY quantity DESC
+            """
+        )
+        potion_inventory = connection.execute(sql_to_execute).fetchall()
 
-    # Fetch the top six potions with the highest quantity and exclude those with quantity of 0
-    sql_to_execute = """
-        SELECT name, quantity, price, sku, red, green, blue, dark FROM potions 
-        WHERE quantity > 0
-        ORDER BY quantity DESC 
-        LIMIT 6
-    """
+        catalog_items = []
 
-    with db.engine.begin() as connection:
-        result = connection.execute(sqlalchemy.text(sql_to_execute))
+        for potion in potion_inventory:
+            if potion.quantity > 0:
+                catalog_items.append({
+                    "sku": potion.sku,
+                    "name": potion.sku,
+                    "quantity": potion.quantity,
+                    "price": potion.price,
+                    "potion_type": [potion.red, potion.green, potion.blue, potion.dark],
+                })
 
-        for row in result:
-            name, quantity, price, sku, red, green, blue, dark = row
-            catalog_items.append({
-                "sku": sku,
-                "name": name,
-                "quantity": quantity,
-                "price": price,
-                "potion_type": [red, green, blue, dark]
-            })
+        if len(catalog_items) > 6:
+            catalog_items = catalog_items[:6]
 
     return catalog_items
+
+
