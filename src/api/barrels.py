@@ -80,7 +80,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
         
         if global_inventory:
             total_gold = global_inventory.gold
-            reserved_gold = 0.2 * total_gold  # Always reserve 20% of the total gold
+            reserved_gold = 0.0 * total_gold  # Always reserve 0% of the total gold
             gold_for_purchase = total_gold - reserved_gold 
 
             num_green_ml = global_inventory.num_green_ml
