@@ -102,11 +102,9 @@ def get_bottle_plan():
                 available_blue_ml // blue_quantity if blue_quantity > 0 else float('inf'),
                 available_dark_ml // dark_quantity if dark_quantity > 0 else float('inf')
             )
-
-            # Determine the actual number of bottles to produce
             num_bottles = min(max_bottles_possible, 5)
 
-            print("Available ml: ", available_red_ml, available_green_ml, available_blue_ml, available_dark_ml)
+            # print("Available ml: ", available_red_ml, available_green_ml, available_blue_ml, available_dark_ml)
 
             # Check if the sum of each potion index doesn't exceed available ml
             if (
@@ -116,13 +114,11 @@ def get_bottle_plan():
                 dark_quantity * num_bottles <= available_dark_ml
             ):
                 if num_bottles > 0:
-                    # Update the available ml for each color
                     available_red_ml -= red_quantity * num_bottles
                     available_green_ml -= green_quantity * num_bottles
                     available_blue_ml -= blue_quantity * num_bottles
                     available_dark_ml -= dark_quantity * num_bottles
 
-                    # Update total_potions_produced and bottle_plan
                     total_potions_produced += num_bottles
                     bottle_plan.append(
                         {
