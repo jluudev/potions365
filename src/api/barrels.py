@@ -64,6 +64,7 @@ def post_deliver_barrels(barrels_delivered: list[Barrel]):
 # Gets called once a day
 @router.post("/plan")
 def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
+    print(wholesale_catalog)
     plan = []
     colors_in_plan = set()  # Set to keep track of colors
     with db.engine.begin() as connection:
@@ -82,6 +83,11 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
             total_gold = global_inventory.gold
             reserved_gold = 0.0 * total_gold  # Always reserve 0% of the total gold
             gold_for_purchase = total_gold - reserved_gold 
+
+            # Reserve gold once I have more than 200 gold
+            if total_gold > 200:
+                reserved_gold = 0.3 * total_gold
+                gold_for_purchase = total_gold - reserved_gold
 
             num_green_ml = global_inventory.num_green_ml
             num_red_ml = global_inventory.num_red_ml
