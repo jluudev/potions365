@@ -78,13 +78,17 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                 SUM(change_dark_ml) as num_dark_ml
             FROM inventory_entries
         """)).first()
+
+        # logic if I have over 10000 total ml
+        if global_inventory.num_red_ml + global_inventory.num_green_ml + global_inventory.num_blue_ml + global_inventory.num_dark_ml > 10000:
+            return plan
         
         if global_inventory:
             total_gold = global_inventory.gold
             reserved_gold = 0.0 * total_gold  # Always reserve 0% of the total gold
             gold_for_purchase = total_gold - reserved_gold 
 
-            # Reserve gold once I have more than 200 gold
+            # Reserve gold if total gold is greater than 200
             if total_gold > 200:
                 reserved_gold = 0.3 * total_gold
                 gold_for_purchase = total_gold - reserved_gold
