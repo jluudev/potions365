@@ -16,7 +16,7 @@ class PotionInventory(BaseModel):
     potion_type: list[int]
     quantity: int
 
-@router.post("/deliver")
+@router.post("/deliver/{order_id}/")
 def post_deliver_bottles(potions_delivered: list[PotionInventory]):
     with db.engine.begin() as connection:
         total_used_ml = [0, 0, 0, 0]
