@@ -91,7 +91,7 @@ def search_orders(
     params = {
         'customer_name': f"%{customer_name}%" if customer_name else None,
         'potion_sku': f"%{potion_sku}%" if potion_sku else None,
-        'offset': current * 5
+        'offset': current
     }
 
     with db.engine.begin() as connection:
