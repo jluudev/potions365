@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, HTTPException
 from pydantic import BaseModel
 from src.api import auth
 from enum import Enum
@@ -25,7 +25,7 @@ class search_sort_order(str, Enum):
 def search_orders(
     customer_name: str = "",
     potion_sku: str = "",
-    search_page: str = "",
+    search_page: str = "0",
     sort_col: search_sort_options = search_sort_options.timestamp,
     sort_order: search_sort_order = search_sort_order.desc,
 ):
@@ -53,22 +53,67 @@ def search_orders(
     Your results must be paginated, the max results you can return at any
     time is 5 total line items.
     """
-    # with db.engine.begin() as connection:
-    #   result = connection.execute(sqlalchemy.text(sql_to_execute))
-    return {
-        "previous": "",
-        "next": "",
-        "results": [
-            {
-                "line_item_id": 1,
-                "item_sku": "1 oblivion potion",
-                "customer_name": "Scaramouche",
-                "line_item_total": 50,
-                "timestamp": "2021-01-01T00:00:00Z",
-            }
-        ],
+    try:
+        current = int(search_page)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid search_page, it must be an integer.")
+
+    filter_list = []
+    if customer_name:
+        filter_list.append("c.customer_name ILIKE :customer_name")
+    if potion_sku:
+        filter_list.append("p.sku ILIKE :potion_sku")
+    filter = " AND ".join(filter_list)
+    filter = f"WHERE {filter}" if filter_list else ""
+
+    sql = f"""
+        SELECT
+            ci.id AS line_item_id,
+            CONCAT(ci.quantity, ' ', p.sku, ' potion') AS item_sku,
+            c.customer_name,
+            (ci.quantity * p.price) AS line_item_total,
+            it.created_at AS timestamp
+        FROM
+            cart_items ci
+        JOIN
+            carts c ON ci.cart_id = c.id
+        JOIN
+            potions p ON ci.potion_id = p.id
+        JOIN
+            inventory_transactions it ON c.inventory_transaction_id = it.id
+        {filter}
+        ORDER BY
+            {sort_col.value} {sort_order.value}
+        LIMIT 5
+        OFFSET :offset
+    """
+
+    params = {
+        'customer_name': f"%{customer_name}%" if customer_name else None,
+        'potion_sku': f"%{potion_sku}%" if potion_sku else None,
+        'offset': current * 5
     }
 
+    with db.engine.begin() as connection:
+        results = connection.execute(sqlalchemy.text(sql), params).fetchall()
+
+    formatted_results = [{
+        "line_item_id": result[0],
+        "item_sku": result[1],
+        "customer_name": result[2],
+        "line_item_total": float(result[3]),
+        "timestamp": result[4].isoformat() if result[4] else None
+    } for result in results]
+
+    next_page = current + 5
+    next = "" if len(results) < 5 else str(next_page)
+    previous = "" if current <= 0 else str(current - 5)
+
+    return {
+        "previous": previous,
+        "next": next,
+        "results": formatted_results
+    }
 
 class Customer(BaseModel):
     customer_name: str
@@ -194,12 +239,6 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
             INSERT INTO inventory_entries (change_gold, transaction_id)
             VALUES (:total_gold_paid, :transaction_id)
         """), {"total_gold_paid": total_gold_paid, "transaction_id": global_transaction_id})
-
-        # Clear cart items
-        connection.execute(sqlalchemy.text("""
-            DELETE FROM cart_items
-            WHERE cart_id = :cart_id
-        """), {"cart_id": cart_id})
 
     return {"total_potions_bought": total_potions_bought, "total_gold_paid": total_gold_paid}
 
