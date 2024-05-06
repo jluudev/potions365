@@ -18,11 +18,11 @@ def reset():
     """
 
     reset_carts = """
-        -- Reset carts
-        DELETE FROM carts;
 
         -- Reset cart_items
         DELETE FROM cart_items;
+        -- Reset carts
+        DELETE FROM carts;
     """
 
     with db.engine.begin() as connection:
