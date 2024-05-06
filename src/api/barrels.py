@@ -92,6 +92,9 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
             if total_gold > 200:
                 reserved_gold = 0.3 * total_gold
                 gold_for_purchase = total_gold - reserved_gold
+            if total_gold > 1000:
+                reserved_gold = 0.5 * total_gold
+                gold_for_purchase = total_gold - reserved_gold
 
             num_green_ml = global_inventory.num_green_ml
             num_red_ml = global_inventory.num_red_ml
@@ -110,7 +113,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                 color = barrel.sku.split("_")[1].upper()
                 # If a dark barrel is available and hasn't been added yet, prioritize it
                 if color == "DARK" and not dark_barrel_added:
-                    if (barrel.ml_per_barrel > 0 and (num_green_ml + num_red_ml + num_blue_ml + num_dark_ml + barrel.ml_per_barrel <= 25000)
+                    if (barrel.ml_per_barrel > 0 and (num_green_ml + num_red_ml + num_blue_ml + num_dark_ml + barrel.ml_per_barrel <= 10000)
                             and (gold_for_purchase >= barrel.price)):
                         plan.append({"sku": barrel.sku, "quantity": 1}) # Only buy 1 barrel for now
                         colors_in_plan.add(color)
@@ -119,7 +122,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
                         dark_barrel_added = True
 
                 elif color not in colors_in_plan:
-                    if (barrel.ml_per_barrel > 0 and (num_green_ml + num_red_ml + num_blue_ml + num_dark_ml + barrel.ml_per_barrel <= 25000)
+                    if (barrel.ml_per_barrel > 0 and (num_green_ml + num_red_ml + num_blue_ml + num_dark_ml + barrel.ml_per_barrel <= 10000)
                             and (gold_for_purchase >= barrel.price)):
                         plan.append({"sku": barrel.sku, "quantity": 1}) # Only buy 1 barrel for now
                         colors_in_plan.add(color)
