@@ -65,12 +65,13 @@ def get_bottle_plan():
 
     with db.engine.begin() as connection:
         potion_query = """
-            SELECT red, green, blue, dark, COALESCE(SUM(pe.change), 0) as total_potions_in_table
+            SELECT red, green, blue, dark
             FROM potions
             LEFT JOIN potions_entries AS pe ON pe.potion_sku = potions.sku
             GROUP BY red, green, blue, dark
         """
         potions_result = connection.execute(sqlalchemy.text(potion_query)).fetchall()
+        total_potions = connection.execute(sqlalchemy.text("""SELECT COALESCE(SUM(change), 0) FROM potions_entries""")).fetchone()[0]
 
         global_inventory_query = """
             SELECT SUM(change_red_ml) as num_red_ml, SUM(change_green_ml) as num_green_ml,
@@ -82,7 +83,6 @@ def get_bottle_plan():
             num_red_ml, num_green_ml, num_blue_ml, num_dark_ml = global_inventory_result
 
         bottle_plan = []
-        total_potions_produced = 0
 
         # Calculate available ml for each color after reservation
         available_red_ml = max(0, num_red_ml - int(ml_reserve_percentage * num_red_ml))
@@ -94,7 +94,7 @@ def get_bottle_plan():
         random.shuffle(potions_result)
 
         for potion_data in potions_result:
-            red_quantity, green_quantity, blue_quantity, dark_quantity, total_potions_in_table = potion_data
+            red_quantity, green_quantity, blue_quantity, dark_quantity = potion_data
 
             max_bottles_possible = min(
                 available_red_ml // red_quantity if red_quantity > 0 else float('inf'),
@@ -119,15 +119,15 @@ def get_bottle_plan():
                     available_blue_ml -= blue_quantity * num_bottles
                     available_dark_ml -= dark_quantity * num_bottles
 
-                    total_potions_produced += num_bottles
+                    total_potions += num_bottles
                     bottle_plan.append(
                         {
                             "potion_type": [red_quantity, green_quantity, blue_quantity, dark_quantity],
                             "quantity": num_bottles
                         }
                     )
-
-            if (total_potions_produced + total_potions_in_table >= 30):
+            # print(total_potions)
+            if (total_potions >= 40):
                 break
 
     return bottle_plan
