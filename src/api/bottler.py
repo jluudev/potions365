@@ -71,7 +71,7 @@ def get_bottle_plan():
             GROUP BY red, green, blue, dark
         """
         potions_result = connection.execute(sqlalchemy.text(potion_query)).fetchall()
-        total_potions = connection.execute(sqlalchemy.text("""SELECT SUM(change) FROM potions_entries""")).fetchone()[0]
+        total_potions = connection.execute(sqlalchemy.text("""SELECT COALESCE(SUM(change), 0) FROM potions_entries""")).fetchone()[0]
 
         global_inventory_query = """
             SELECT SUM(change_red_ml) as num_red_ml, SUM(change_green_ml) as num_green_ml,
