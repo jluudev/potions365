@@ -66,6 +66,7 @@ def post_deliver_barrels(barrels_delivered: list[Barrel]):
 def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
     print(wholesale_catalog)
     plan = []
+
     colors_in_plan = set()  # Set to keep track of colors
     with db.engine.begin() as connection:
         # Fetch global inventory
@@ -80,7 +81,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: list[Barrel]):
         """)).first()
 
         # logic if I have over 10000 total ml
-        if global_inventory.num_red_ml + global_inventory.num_green_ml + global_inventory.num_blue_ml + global_inventory.num_dark_ml > 10000:
+        if global_inventory.num_red_ml + global_inventory.num_green_ml + global_inventory.num_blue_ml + global_inventory.num_dark_ml > 7500:
             return plan
         
         if global_inventory:
